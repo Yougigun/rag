@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use sqlx::{Pool, Postgres};
 
-use crate::models::{CreateTaskRequest, FileEmbeddingTask, TaskStatus, UpdateTaskRequest};
+use crate::models::file_embedding_task::{CreateTaskRequest, FileEmbeddingTask, TaskStatus, UpdateTaskRequest};
 
 #[derive(Debug, Deserialize)]
 pub struct ListTasksQuery {

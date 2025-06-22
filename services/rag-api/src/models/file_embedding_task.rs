@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Pool, Postgres};
 
@@ -40,10 +40,10 @@ pub struct FileEmbeddingTask {
     pub id: i32,
     pub file_name: String,
     pub status: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub started_at: Option<DateTime<Utc>>,
-    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub started_at: Option<NaiveDateTime>,
+    pub completed_at: Option<NaiveDateTime>,
     pub error_message: Option<String>,
     pub embedding_count: Option<i32>,
 }
@@ -65,10 +65,10 @@ pub struct TaskResponse {
     pub id: i32,
     pub file_name: String,
     pub status: TaskStatus,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub started_at: Option<DateTime<Utc>>,
-    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub started_at: Option<NaiveDateTime>,
+    pub completed_at: Option<NaiveDateTime>,
     pub error_message: Option<String>,
     pub embedding_count: Option<i32>,
 }
@@ -91,15 +91,14 @@ impl From<FileEmbeddingTask> for TaskResponse {
 
 impl FileEmbeddingTask {
     pub async fn create(pool: &Pool<Postgres>, request: CreateTaskRequest) -> Result<TaskResponse> {
-        let task = sqlx::query_as!(
-            FileEmbeddingTask,
+        let task = sqlx::query_as::<_, FileEmbeddingTask>(
             r#"
             INSERT INTO file_to_embedding_task (file_name)
             VALUES ($1)
             RETURNING id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
             "#,
-            request.file_name
         )
+        .bind(request.file_name)
         .fetch_one(pool)
         .await?;
 
@@ -107,15 +106,14 @@ impl FileEmbeddingTask {
     }
 
     pub async fn find_by_id(pool: &Pool<Postgres>, id: i32) -> Result<Option<TaskResponse>> {
-        let task = sqlx::query_as!(
-            FileEmbeddingTask,
+        let task = sqlx::query_as::<_, FileEmbeddingTask>(
             r#"
             SELECT id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
             FROM file_to_embedding_task
             WHERE id = $1
             "#,
-            id
         )
+        .bind(id)
         .fetch_optional(pool)
         .await?;
 
@@ -134,8 +132,7 @@ impl FileEmbeddingTask {
         let tasks = match status_filter {
             Some(status) => {
                 let status_str: String = status.into();
-                sqlx::query_as!(
-                    FileEmbeddingTask,
+                sqlx::query_as::<_, FileEmbeddingTask>(
                     r#"
                     SELECT id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
                     FROM file_to_embedding_task
@@ -143,25 +140,24 @@ impl FileEmbeddingTask {
                     ORDER BY created_at DESC
                     LIMIT $2 OFFSET $3
                     "#,
-                    status_str,
-                    limit,
-                    offset
                 )
+                .bind(status_str)
+                .bind(limit)
+                .bind(offset)
                 .fetch_all(pool)
                 .await?
             }
             None => {
-                sqlx::query_as!(
-                    FileEmbeddingTask,
+                sqlx::query_as::<_, FileEmbeddingTask>(
                     r#"
                     SELECT id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
                     FROM file_to_embedding_task
                     ORDER BY created_at DESC
                     LIMIT $1 OFFSET $2
                     "#,
-                    limit,
-                    offset
                 )
+                .bind(limit)
+                .bind(offset)
                 .fetch_all(pool)
                 .await?
             }
@@ -175,81 +171,51 @@ impl FileEmbeddingTask {
         id: i32,
         request: UpdateTaskRequest,
     ) -> Result<Option<TaskResponse>> {
-        let mut query_parts = Vec::new();
-        let mut param_count = 1;
-
-        if request.status.is_some() {
-            query_parts.push(format!("status = ${}", param_count));
-            param_count += 1;
-        }
-        if request.error_message.is_some() {
-            query_parts.push(format!("error_message = ${}", param_count));
-            param_count += 1;
-        }
-        if request.embedding_count.is_some() {
-            query_parts.push(format!("embedding_count = ${}", param_count));
-            param_count += 1;
-        }
-
-        // Always update the updated_at timestamp
-        query_parts.push(format!("updated_at = NOW()"));
-
-        // Set started_at when status changes to processing
-        if let Some(TaskStatus::Processing) = request.status {
-            query_parts.push(format!("started_at = NOW()"));
-        }
-
-        // Set completed_at when status changes to completed or failed
-        if let Some(status) = &request.status {
-            if matches!(status, TaskStatus::Completed | TaskStatus::Failed) {
-                query_parts.push(format!("completed_at = NOW()"));
-            }
-        }
-
-        if query_parts.is_empty() {
+        // Simple update - only update provided fields
+        if request.status.is_none() && request.error_message.is_none() && request.embedding_count.is_none() {
             return Self::find_by_id(pool, id).await;
         }
 
-        let set_clause = query_parts.join(", ");
-        let query = format!(
+        // For now, we'll do a basic update that handles status changes
+        let status_str: Option<String> = request.status.map(|s| s.into());
+        
+        let task = sqlx::query_as::<_, FileEmbeddingTask>(
             r#"
             UPDATE file_to_embedding_task
-            SET {}
-            WHERE id = ${}
+            SET status = COALESCE($1, status),
+                error_message = COALESCE($2, error_message),
+                embedding_count = COALESCE($3, embedding_count),
+                updated_at = NOW(),
+                started_at = CASE 
+                    WHEN $1 = 'processing' AND started_at IS NULL THEN NOW() 
+                    ELSE started_at 
+                END,
+                completed_at = CASE 
+                    WHEN $1 IN ('completed', 'failed') AND completed_at IS NULL THEN NOW()
+                    ELSE completed_at 
+                END
+            WHERE id = $4
             RETURNING id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
             "#,
-            set_clause,
-            param_count
-        );
-
-        let mut query_builder = sqlx::query_as::<_, FileEmbeddingTask>(&query);
-
-        if let Some(status) = request.status {
-            let status_str: String = status.into();
-            query_builder = query_builder.bind(status_str);
-        }
-        if let Some(error_message) = request.error_message {
-            query_builder = query_builder.bind(error_message);
-        }
-        if let Some(embedding_count) = request.embedding_count {
-            query_builder = query_builder.bind(embedding_count);
-        }
-
-        query_builder = query_builder.bind(id);
-
-        let task = query_builder.fetch_optional(pool).await?;
+        )
+        .bind(status_str)
+        .bind(request.error_message)
+        .bind(request.embedding_count)
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
 
         Ok(task.map(TaskResponse::from))
     }
 
     pub async fn delete(pool: &Pool<Postgres>, id: i32) -> Result<bool> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             DELETE FROM file_to_embedding_task
             WHERE id = $1
             "#,
-            id
         )
+        .bind(id)
         .execute(pool)
         .await?;
 

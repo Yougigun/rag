@@ -75,6 +75,7 @@ rag/
 │   └── src/client/      # Client implementations
 ├── documents/           # Sample documents directory
 ├── migrations/          # Database migration scripts
+├── api-test.js         # API endpoint tests (k6)
 ├── docker-compose.yaml  # Service orchestration
 ├── Makefile            # Development commands
 ├── .gitignore          # Git ignore rules
@@ -91,7 +92,7 @@ make help          # Show all available commands
 make run           # Build and start all services (infrastructure + applications)
 make migrate       # Run database migrations
 make migrate-down  # Rollback database migrations
-make test          # Run k6 load test against the API
+make test          # Run API endpoint tests
 make down          # Stop all services
 make clean         # Stop services and remove volumes
 ```
@@ -369,7 +370,7 @@ When running with `make run`, services are available at:
 - Infrastructure services (PostgreSQL, Qdrant, Kafka)
 - Background worker service with graceful shutdown
 - Shared library with client utilities
-- k6 load testing setup
+- k6 API testing setup
 - Simple development workflow
 
 ### 🔄 Planned
@@ -401,12 +402,14 @@ When running with `make run`, services are available at:
 
 ## 🛠️ Testing
 
-### k6 Load Testing
+### k6 API Testing
 
-The project includes a simple k6 test that:
-- Makes a single request to the health endpoint
-- Verifies the API returns correct status and service name
-- Provides clear pass/fail feedback
+The project includes comprehensive k6 API tests (`api-test.js`) that:
+- Test health check endpoint
+- Test all embedding task CRUD operations (create, read, update, delete)
+- Verify proper HTTP status codes and response formats
+- Test error handling and edge cases
+- Provide detailed test results and feedback
 
 Run with: `make test`
 

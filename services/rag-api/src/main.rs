@@ -15,7 +15,7 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
 use xlib::{
     app::{serve::serve_service, tracing::init_tracing},
-    client::postgres::{PostgresClient, PostgresClientConfig},
+    client::{PostgresClient, PostgresClientConfig},
 };
 
 use handlers::file_embedding_task::{
@@ -81,9 +81,9 @@ async fn main() -> Result<()> {
         // Embedding task endpoints
         .route("/api/v1/embedding-tasks", post(create_task))
         .route("/api/v1/embedding-tasks", get(list_tasks))
-        .route("/api/v1/embedding-tasks/:id", get(get_task))
-        .route("/api/v1/embedding-tasks/:id", put(update_task))
-        .route("/api/v1/embedding-tasks/:id", delete(delete_task))
+        .route("/api/v1/embedding-tasks/{id}", get(get_task))
+        .route("/api/v1/embedding-tasks/{id}", put(update_task))
+        .route("/api/v1/embedding-tasks/{id}", delete(delete_task))
         .with_state(pool)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());

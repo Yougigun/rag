@@ -23,11 +23,11 @@ run:
 	@echo "  - Qdrant: http://localhost:6333"
 	@echo "  - Kafka: localhost:9092"
 
-# Test the API with k6
+# Test the API endpoints with k6
 .PHONY: test
 test:
-	@printf '\033[0;34m> Running k6 load test...\033[0m\n'
-	k6 run load-test.js
+	@printf '\033[0;34m> Running API tests...\033[0m\n'
+	k6 run api-test.js
 
 # Run database migrations
 .PHONY: migrate
@@ -63,7 +63,7 @@ help:
 	@echo "  run          - Build and start all services (infrastructure + applications)"
 	@echo "  migrate      - Run database migrations"
 	@echo "  migrate-down - Rollback database migrations"
-	@echo "  test         - Run k6 load test against the API"
+	@echo "  test         - Run API endpoint tests"
 	@echo "  down         - Stop all services"
 	@echo "  clean        - Stop services and remove volumes"
 	@echo "  help         - Show this help"
