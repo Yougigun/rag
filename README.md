@@ -1,77 +1,60 @@
 # RAG System - Retrieval-Augmented Generation
 
-A modern RAG system built with Rust, featuring local text file retrieval, OpenAI GPT-4o integration, and event streaming with Kafka.
+A modern RAG system built with Rust, featuring microservices architecture with Docker orchestration and k6 testing.
 
 ## 🏗️ Architecture
 
 This project follows a microservices architecture with the following components:
 
 ### Services
-- **rag-api**: REST API service handling query requests and responses
-- **file-processor**: Background service for document ingestion and processing
+- **rag-api**: REST API service with health check and query endpoints
+- **file-processor**: Background worker service with graceful shutdown
 - **xlib**: Shared library with common utilities (database, OpenAI, Kafka clients)
 
 ### Infrastructure
 - **PostgreSQL**: Document metadata storage
 - **Qdrant**: Vector database for similarity search
 - **Kafka**: Event streaming for inter-service communication
-- **OpenAI**: GPT-4o for text generation and embeddings
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Docker and Docker Compose
-- OpenAI API key
+- k6 (for testing)
 
-### Setup
+### Setup & Run
 
-1. **Clone and setup environment**:
+1. **Clone repository**:
    ```bash
    git clone <repository>
    cd rag
-   make setup  # Creates .env file
    ```
 
-2. **Add your OpenAI API key**:
+2. **Set up environment** (optional):
    ```bash
-   # Edit .env file (created by make setup)
-   OPENAI_API_KEY=your_actual_api_key_here
+   # Create .env file if you need to customize environment variables
+   echo "OPENAI_API_KEY=test_key" > .env
    ```
-   
-   **Note**: The `.env` file is git-ignored for security. Never commit API keys!
 
-3. **Build and start services**:
+3. **Start everything**:
    ```bash
-   make build
    make run
    ```
+   This command will:
+   - Build all Docker services
+   - Start all infrastructure and application services
+   - Wait for services to be ready
+   - Show service URLs
 
-4. **Check service status**:
+4. **Test the API**:
    ```bash
-   make status
+   make test
    ```
 
-### Testing
-
-Test the API endpoints:
-```bash
-make test-api
-```
-
-Or manually:
-```bash
-# Health check
-curl http://localhost:3000/api/v1/health
-
-# Query example
-curl -X POST http://localhost:3000/api/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "How do I optimize database queries?",
-    "system_prompt": "You are a senior database engineer.",
-    "json_mode": false
-  }'
-```
+5. **Stop services**:
+   ```bash
+   make down
+   ```
 
 ## 📁 Project Structure
 
@@ -100,28 +83,37 @@ rag/
 ### Available Commands
 
 ```bash
-make help                # Show all available commands
-make build              # Build all services
-make run                # Start services in background
-make run-logs           # Start services with logs
-make down               # Stop services
-make clean              # Stop services and remove volumes
-make logs               # View all logs
-make logs-api           # View API service logs
-make logs-processor     # View file processor logs
-make check              # Run cargo check
-make test               # Run tests
-make fmt                # Format code
-make clippy             # Run clippy linter
+make help    # Show all available commands
+make run     # Build and start all services (infrastructure + applications)
+make test    # Run k6 load test against the API
+make down    # Stop all services
+make clean   # Stop services and remove volumes
+```
+
+### Manual Testing
+
+Test individual endpoints:
+
+```bash
+# Health check
+curl http://localhost:3000/api/v1/health
+
+# Query endpoint
+curl -X POST http://localhost:3000/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do I optimize database queries?",
+    "system_prompt": "You are a senior database engineer.",
+    "json_mode": false
+  }'
 ```
 
 ### Local Development
 
 To run services locally without Docker:
 
-1. **Start infrastructure**:
+1. **Start infrastructure only**:
    ```bash
-   # Start only Postgres, Qdrant, and Kafka
    docker compose up postgres qdrant kafka -d
    ```
 
@@ -164,23 +156,16 @@ Request:
   "query": "How do I optimize database queries?",
   "system_prompt": "You are a senior software engineer.",
   "user_prompt": "Based on the documentation, provide specific advice.",
-  "json_mode": true,
-  "api_endpoints": ["https://api.company.com/metrics"]
+  "json_mode": true
 }
 ```
 
-Response:
+Response (currently mock implementation):
 ```json
 {
-  "response": "Based on the documentation...",
-  "sources": ["database-optimization.txt", "sql-performance.md"],
-  "retrieved_files": [
-    {
-      "filename": "database-optimization.txt",
-      "similarity_score": 0.89,
-      "chunk_id": 1
-    }
-  ]
+  "status": "ok",
+  "message": "Query processed successfully",
+  "query": "How do I optimize database queries?"
 }
 ```
 
@@ -188,13 +173,11 @@ Response:
 
 ### Environment Variables
 
-Create a `.env` file with:
+Environment variables are configured via `.env` file (optional):
 
 ```bash
-# Required
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional (defaults provided)
+# Optional (defaults provided in docker-compose.yaml)
+OPENAI_API_KEY=test_key
 DATABASE_HOSTNAME=postgres
 DATABASE_USER=raguser
 DATABASE_PASSWORD=ragpassword
@@ -203,94 +186,104 @@ QDRANT_URL=http://qdrant:6333
 DOCUMENTS_PATH=/documents
 ```
 
-### Adding Documents
+### Service URLs
 
-Place `.txt` or `.md` files in the `documents/` directory. The file processor will automatically:
+When running with `make run`, services are available at:
 
-1. Detect new files
-2. Chunk the content
-3. Generate embeddings
-4. Store in Qdrant vector database
-5. Send processing events to Kafka
+- **RAG API**: http://localhost:3000
+- **PostgreSQL**: localhost:5432
+- **Qdrant**: http://localhost:6333  
+- **Kafka**: localhost:9092
 
 ## 🛠️ Features
 
 ### ✅ Implemented
-- Vector similarity search (top 5 files)
-- OpenAI GPT-4o integration
-- JSON and plain text response modes
-- File ingestion and chunking
-- Event streaming with Kafka
-- System/user prompt support
-- Graceful shutdown handling
-- Comprehensive logging
+- Microservices architecture with Docker
+- REST API with health check and query endpoints
+- Infrastructure services (PostgreSQL, Qdrant, Kafka)
+- Background worker service with graceful shutdown
+- Shared library with client utilities
+- k6 load testing setup
+- Simple development workflow
 
 ### 🔄 Planned
-- Web frontend interface
+- Actual RAG functionality (vector search, OpenAI integration)
+- Document ingestion and processing
+- Vector embeddings and similarity search
 - File upload API
-- API data integration
-- Advanced chunking strategies
-- Performance monitoring dashboard
+- Web frontend interface
 
 ## 🏛️ Architecture Details
 
-### Data Flow
+### Current Implementation
 
-1. **Document Ingestion**: Files placed in `documents/` → File Processor
-2. **Processing**: File Processor → Chunks → OpenAI Embeddings → Qdrant
-3. **Query**: User Query → RAG API → Embedding → Qdrant Search
-4. **Generation**: Retrieved Context + Query → OpenAI GPT-4o → Response
-5. **Events**: All operations publish events to Kafka
+1. **rag-api**: REST API service with Axum framework providing health check and query endpoints
+2. **file-processor**: Background worker service that runs continuously with graceful shutdown
+3. **xlib**: Shared library containing client utilities for PostgreSQL, Qdrant, Kafka, and OpenAI
+4. **Infrastructure**: PostgreSQL, Qdrant, and Kafka services managed via Docker Compose
 
 ### Technology Stack
 
 - **Language**: Rust 🦀
 - **Web Framework**: Axum
-- **Database**: PostgreSQL + SQLx
-- **Vector DB**: Qdrant
-- **Message Queue**: Apache Kafka
-- **AI**: OpenAI GPT-4o + text-embedding-3-small
+- **Database**: PostgreSQL + SQLx (clients implemented)
+- **Vector DB**: Qdrant (client implemented)
+- **Message Queue**: Apache Kafka (client implemented)
+- **AI**: OpenAI integration (client implemented)
 - **Containerization**: Docker + Docker Compose
+- **Testing**: k6 for API testing
 
-## 🤝 Contributing
+## 🛠️ Testing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make changes following the coding standards
-4. Run tests: `make test`
-5. Format code: `make fmt`
-6. Run linter: `make clippy`
-7. Submit a pull request
+### k6 Load Testing
 
-## 📝 License
+The project includes a simple k6 test that:
+- Makes a single request to the health endpoint
+- Verifies the API returns correct status and service name
+- Provides clear pass/fail feedback
 
-This project is licensed under the MIT License.
+Run with: `make test`
+
+### Manual Testing
+
+Test endpoints directly:
+```bash
+# Health check
+curl http://localhost:3000/api/v1/health
+
+# Query endpoint (returns mock response)
+curl -X POST http://localhost:3000/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "test query"}'
+```
+
+## 🚀 Development Workflow
+
+1. **Start services**: `make run`
+2. **Test API**: `make test`
+3. **View logs**: `docker compose logs -f`
+4. **Stop services**: `make down`
 
 ## 🆘 Troubleshooting
 
 ### Common Issues
 
-1. **OpenAI API Key not set**:
-   - Ensure `OPENAI_API_KEY` is set in `.env`
-   - Restart services after updating environment variables
+1. **Services not starting**:
+   - Ensure Docker is running
+   - Check ports 3000, 5432, 6333, 9092 are available
+   - Run `docker compose ps` to check status
 
-2. **Services not starting**:
-   - Check logs: `make logs`
-   - Ensure all ports are available (3000, 5432, 6333, 9092)
+2. **k6 test failing**:
+   - Ensure services are running: `make run`
+   - Wait for services to be ready (handled automatically by `make run`)
+   - Check API health: `curl http://localhost:3000/api/v1/health`
 
-3. **File processing not working**:
-   - Check file processor logs: `make logs-processor`
-   - Ensure documents are in correct format (.txt or .md)
-   - Verify OpenAI API key is valid
-
-4. **Vector search returns no results**:
-   - Wait for file processing to complete
-   - Check Qdrant collection: `curl http://localhost:6333/collections`
+3. **Build issues**:
+   - Clean up: `make clean`
+   - Rebuild: `make run`
 
 ### Getting Help
 
-- Check service logs: `make logs`
-- Verify service status: `make status`
-- Test API health: `curl http://localhost:3000/api/v1/health`
-
-For more help, please open an issue in the repository. 
+- Check all services: `docker compose ps`
+- View logs: `docker compose logs -f [service-name]`
+- Test connectivity: `curl http://localhost:3000/api/v1/health` 
