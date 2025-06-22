@@ -144,3 +144,7 @@ volumes:
   postgres_data:
   qdrant_data:
   kafka_data:
+
+networks:
+  default:
+    name: rag-network
