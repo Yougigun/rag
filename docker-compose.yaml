@@ -1,0 +1,66 @@
+services:
+  rag-api:
+    build: ./services/rag-api
+    ports: ["3000:3000"]
+    depends_on: [postgres, qdrant, kafka]
+    environment:
+      RUST_LOG: info
+      DATABASE_HOSTNAME: postgres
+      DATABASE_USER: raguser
+      DATABASE_PASSWORD: ragpassword
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      QDRANT_URL: http://qdrant:6333
+      
+  file-processor:
+    build: ./services/file-processor
+    volumes: ["./documents:/documents"]
+    depends_on: [postgres, qdrant, kafka]
+    environment:
+      RUST_LOG: info
+      DATABASE_HOSTNAME: postgres
+      DATABASE_USER: raguser
+      DATABASE_PASSWORD: ragpassword
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      QDRANT_URL: http://qdrant:6333
+      DOCUMENTS_PATH: /documents
+    
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ragpassword
+      POSTGRES_DB: rag
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports: ["6333:6333"]
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # Simple Kafka addition
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:19092'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:19093'
+      KAFKA_LISTENERS: 'CONTROLLER://kafka:19093,PLAINTEXT://kafka:19092,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  kafka_data: 
