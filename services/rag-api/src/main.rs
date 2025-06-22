@@ -1,8 +1,11 @@
+mod handlers;
+mod models;
+
 use anyhow::Result;
 use axum::{
     extract::Json,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -10,7 +13,14 @@ use serde_json::json;
 use std::net::SocketAddr;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
-use xlib::app::{serve::serve_service, tracing::init_tracing};
+use xlib::{
+    app::{serve::serve_service, tracing::init_tracing},
+    client::postgres::{PostgresClient, PostgresClientConfig},
+};
+
+use handlers::file_embedding_task::{
+    create_task, delete_task, get_task, list_tasks, update_task,
+};
 
 #[derive(Deserialize)]
 struct QueryRequest {
@@ -50,9 +60,31 @@ async fn main() -> Result<()> {
 
     info!("Starting RAG API service...");
 
+    // Initialize database connection
+    let postgres_config = PostgresClientConfig {
+        hostname: std::env::var("DATABASE_HOSTNAME").unwrap_or_else(|_| "localhost".to_string()),
+        port: std::env::var("DATABASE_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok()),
+        user: Some(std::env::var("DATABASE_USER").unwrap_or_else(|_| "raguser".to_string())),
+        password: Some(std::env::var("DATABASE_PASSWORD").unwrap_or_else(|_| "ragpassword".to_string())),
+        db_name: std::env::var("DATABASE_NAME").unwrap_or_else(|_| "rag".to_string()),
+    };
+
+    let postgres_client = PostgresClient::build(&postgres_config).await?;
+    let pool = postgres_client.into_inner();
+
     let app = Router::new()
+        // Health and query endpoints
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/query", post(query_handler))
+        // Embedding task endpoints
+        .route("/api/v1/embedding-tasks", post(create_task))
+        .route("/api/v1/embedding-tasks", get(list_tasks))
+        .route("/api/v1/embedding-tasks/:id", get(get_task))
+        .route("/api/v1/embedding-tasks/:id", put(update_task))
+        .route("/api/v1/embedding-tasks/:id", delete(delete_task))
+        .with_state(pool)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 

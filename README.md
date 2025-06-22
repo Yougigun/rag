@@ -175,6 +175,117 @@ Response (currently mock implementation):
 }
 ```
 
+#### Embedding Task Management
+
+##### Create Embedding Task
+```
+POST /api/v1/embedding-tasks
+```
+
+Request:
+```json
+{
+  "file_name": "sample-document.txt"
+}
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "file_name": "sample-document.txt",
+  "status": "pending",
+  "created_at": "2025-06-22T14:00:00Z",
+  "updated_at": "2025-06-22T14:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "error_message": null,
+  "embedding_count": null
+}
+```
+
+##### List Embedding Tasks
+```
+GET /api/v1/embedding-tasks?status=pending&limit=10&offset=0
+```
+
+Query Parameters:
+- `status` (optional): Filter by task status (pending, processing, completed, failed)
+- `limit` (optional): Number of tasks to return (default: 50)
+- `offset` (optional): Number of tasks to skip (default: 0)
+
+Response:
+```json
+[
+  {
+    "id": 1,
+    "file_name": "sample-document.txt",
+    "status": "pending",
+    "created_at": "2025-06-22T14:00:00Z",
+    "updated_at": "2025-06-22T14:00:00Z",
+    "started_at": null,
+    "completed_at": null,
+    "error_message": null,
+    "embedding_count": null
+  }
+]
+```
+
+##### Get Embedding Task
+```
+GET /api/v1/embedding-tasks/{id}
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "file_name": "sample-document.txt",
+  "status": "processing",
+  "created_at": "2025-06-22T14:00:00Z",
+  "updated_at": "2025-06-22T14:05:00Z",
+  "started_at": "2025-06-22T14:05:00Z",
+  "completed_at": null,
+  "error_message": null,
+  "embedding_count": null
+}
+```
+
+##### Update Embedding Task
+```
+PUT /api/v1/embedding-tasks/{id}
+```
+
+Request:
+```json
+{
+  "status": "completed",
+  "embedding_count": 150
+}
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "file_name": "sample-document.txt",
+  "status": "completed",
+  "created_at": "2025-06-22T14:00:00Z",
+  "updated_at": "2025-06-22T14:10:00Z",
+  "started_at": "2025-06-22T14:05:00Z",
+  "completed_at": "2025-06-22T14:10:00Z",
+  "error_message": null,
+  "embedding_count": 150
+}
+```
+
+##### Delete Embedding Task
+```
+DELETE /api/v1/embedding-tasks/{id}
+```
+
+Response: `204 No Content`
+
 ## 🗄️ Database Migrations
 
 The project uses the [migrate/migrate](https://github.com/golang-migrate/migrate) tool for database schema management.
@@ -310,6 +421,25 @@ curl http://localhost:3000/api/v1/health
 curl -X POST http://localhost:3000/api/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "test query"}'
+
+# Create embedding task
+curl -X POST http://localhost:3000/api/v1/embedding-tasks \
+  -H "Content-Type: application/json" \
+  -d '{"file_name": "sample-document.txt"}'
+
+# List embedding tasks
+curl http://localhost:3000/api/v1/embedding-tasks
+
+# Get specific embedding task
+curl http://localhost:3000/api/v1/embedding-tasks/1
+
+# Update embedding task
+curl -X PUT http://localhost:3000/api/v1/embedding-tasks/1 \
+  -H "Content-Type: application/json" \
+  -d '{"status": "completed", "embedding_count": 150}'
+
+# Delete embedding task
+curl -X DELETE http://localhost:3000/api/v1/embedding-tasks/1
 ```
 
 ## 🚀 Development Workflow
