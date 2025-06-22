@@ -21,6 +21,7 @@ This project follows a microservices architecture with the following components:
 ### Prerequisites
 - Docker and Docker Compose
 - k6 (for testing)
+- make (for running commands)
 
 ### Setup & Run
 
@@ -73,10 +74,6 @@ rag/
 └── README.md
 ```
 
-### Important Files
-- **`.env`**: Environment variables (git-ignored, create with `make setup`)
-- **`target/`**: Rust build artifacts (git-ignored)
-- **`.gitignore`**: Excludes sensitive and generated files from version control
 
 ## 🔧 Development
 
