@@ -4,7 +4,17 @@ services:
       context: .
       dockerfile: ./services/rag-api/Dockerfile
     ports: ["3000:3000"]
-    depends_on: [migrate, postgres, qdrant, kafka]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kafka-setup:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       RUST_LOG: debug
       DATABASE_HOSTNAME: postgres
@@ -13,7 +23,7 @@ services:
       DATABASE_NAME: rag
       DATABASE_URL: postgres://raguser:ragpassword@postgres:5432/rag
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: broker:19092
       QDRANT_URL: http://qdrant:6333
       
   file-processor:
@@ -21,23 +31,45 @@ services:
       context: .
       dockerfile: ./services/file-processor/Dockerfile
     volumes: ["./documents:/documents"]
-    depends_on: [migrate, postgres, qdrant, kafka]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kafka-setup:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       RUST_LOG: info
       DATABASE_HOSTNAME: postgres
       DATABASE_USER: raguser
       DATABASE_PASSWORD: ragpassword
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: broker:19092
       QDRANT_URL: http://qdrant:6333
       DOCUMENTS_PATH: /documents
     
   migrate:
     image: migrate/migrate:latest
-    depends_on: [postgres]
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./migrations:/migrations
     command: ["-path", "/migrations", "-database", "postgres://raguser:ragpassword@postgres:5432/rag?sslmode=disable", "up"]
+    restart: "no"
+
+  kafka-setup:
+    image: apache/kafka:latest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/scripts
+    command: ["sh", "/scripts/kafka-setup.sh"]
     restart: "no"
       
   postgres:
@@ -49,6 +81,11 @@ services:
     ports: ["5432:5432"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raguser -d rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
       
   qdrant:
     image: qdrant/qdrant:latest
@@ -56,23 +93,29 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
-  # Simple Kafka addition
   kafka:
     image: apache/kafka:latest
-    container_name: kafka
+    container_name: broker
     ports:
       - "9092:9092"
+    restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:19092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092'
       KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:19093'
-      KAFKA_LISTENERS: 'CONTROLLER://kafka:19093,PLAINTEXT://kafka:19092,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:19093'
+      KAFKA_LISTENERS: 'CONTROLLER://broker:19093,PLAINTEXT://broker:19092,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     volumes:
       - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
 volumes:
   postgres_data:

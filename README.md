@@ -47,8 +47,13 @@ This project follows a microservices architecture with the following components:
    - Wait for services to be ready
    - Show service URLs
 
-4. **Database migrations** (automatic):
-   Migrations in the `migrations/` folder are automatically applied during startup. You can also run them manually:
+4. **Database migrations & Kafka setup** (automatic):
+   Migrations in the `migrations/` folder and Kafka topic creation are automatically applied during startup. The system ensures:
+   - Database migrations are applied
+   - Kafka topics are created
+   - Services start only after setup is complete
+   
+   You can also run migrations manually:
    ```bash
    make migrate
    ```
@@ -75,6 +80,7 @@ rag/
 │   └── src/client/      # Client implementations
 ├── documents/           # Sample documents directory
 ├── migrations/          # Database migration scripts
+├── scripts/             # Setup scripts (Kafka topic creation)
 ├── api-test.js         # API endpoint tests (k6)
 ├── docker-compose.yaml  # Service orchestration
 ├── Makefile            # Development commands
@@ -204,6 +210,8 @@ Response:
   "embedding_count": null
 }
 ```
+
+**Note**: Creating an embedding task also sends a Kafka message to the `file-embedding-tasks` topic for asynchronous processing by the file-processor service.
 
 ##### List Embedding Tasks
 ```
@@ -368,10 +376,13 @@ When running with `make run`, services are available at:
 - Microservices architecture with Docker
 - REST API with health check and query endpoints
 - Infrastructure services (PostgreSQL, Qdrant, Kafka)
+- Kafka-based messaging between services
+- Automated Kafka topic creation on startup
 - Background worker service with graceful shutdown
-- Shared library with client utilities
+- File embedding task CRUD operations with database persistence
+- Shared library with client utilities (PostgreSQL, Kafka, Qdrant, OpenAI)
 - k6 API testing setup
-- Simple development workflow
+- Simple development workflow with proper service orchestration
 
 ### 🔄 Planned
 - Actual RAG functionality (vector search, OpenAI integration)
@@ -384,10 +395,11 @@ When running with `make run`, services are available at:
 
 ### Current Implementation
 
-1. **rag-api**: REST API service with Axum framework providing health check and query endpoints
-2. **file-processor**: Background worker service that runs continuously with graceful shutdown
+1. **rag-api**: REST API service with Axum framework providing health check, query, and embedding task endpoints. Sends Kafka messages when tasks are created.
+2. **file-processor**: Background worker service that consumes Kafka messages and processes file embedding tasks with graceful shutdown.
 3. **xlib**: Shared library containing client utilities for PostgreSQL, Qdrant, Kafka, and OpenAI
-4. **Infrastructure**: PostgreSQL, Qdrant, and Kafka services managed via Docker Compose
+4. **Infrastructure**: PostgreSQL, Qdrant, and Kafka services managed via Docker Compose with automated setup
+5. **Service Orchestration**: Proper startup ordering ensures database migrations and Kafka topic creation before application services start
 
 ### Technology Stack
 

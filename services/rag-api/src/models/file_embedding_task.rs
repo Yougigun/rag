@@ -91,12 +91,12 @@ impl From<FileEmbeddingTask> for TaskResponse {
 
 impl FileEmbeddingTask {
     pub async fn create(pool: &Pool<Postgres>, request: CreateTaskRequest) -> Result<TaskResponse> {
-        let task = sqlx::query_as::<_, FileEmbeddingTask>(
-            r#"
+        let task = sqlx::query_as::<_, Self>(
+            "
             INSERT INTO file_to_embedding_task (file_name)
             VALUES ($1)
             RETURNING id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
-            "#,
+            ",
         )
         .bind(request.file_name)
         .fetch_one(pool)
@@ -106,12 +106,12 @@ impl FileEmbeddingTask {
     }
 
     pub async fn find_by_id(pool: &Pool<Postgres>, id: i32) -> Result<Option<TaskResponse>> {
-        let task = sqlx::query_as::<_, FileEmbeddingTask>(
-            r#"
+        let task = sqlx::query_as::<_, Self>(
+            "
             SELECT id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
             FROM file_to_embedding_task
             WHERE id = $1
-            "#,
+            ",
         )
         .bind(id)
         .fetch_optional(pool)
@@ -172,13 +172,16 @@ impl FileEmbeddingTask {
         request: UpdateTaskRequest,
     ) -> Result<Option<TaskResponse>> {
         // Simple update - only update provided fields
-        if request.status.is_none() && request.error_message.is_none() && request.embedding_count.is_none() {
+        if request.status.is_none()
+            && request.error_message.is_none()
+            && request.embedding_count.is_none()
+        {
             return Self::find_by_id(pool, id).await;
         }
 
         // For now, we'll do a basic update that handles status changes
         let status_str: Option<String> = request.status.map(|s| s.into());
-        
+
         let task = sqlx::query_as::<_, FileEmbeddingTask>(
             r#"
             UPDATE file_to_embedding_task

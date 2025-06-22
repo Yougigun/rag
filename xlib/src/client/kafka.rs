@@ -7,13 +7,15 @@ use rdkafka::{
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tracing::{error, info};
+use tokio::time::sleep;
+use tracing::{error, info, warn};
 
 pub struct KafkaClient {
     producer: FutureProducer,
     consumer: StreamConsumer,
 }
 
+#[derive(Clone)]
 pub struct KafkaClientConfig {
     pub bootstrap_servers: String,
     pub group_id: Option<String>,
@@ -28,19 +30,28 @@ pub struct KafkaMessage {
 
 impl KafkaClient {
     pub fn new(config: KafkaClientConfig) -> Result<Self> {
-        // Producer configuration
+        // Producer configuration with better settings
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", &config.bootstrap_servers)
-            .set("message.timeout.ms", "5000")
+            .set("message.timeout.ms", "10000")
+            .set("request.timeout.ms", "5000")
+            .set("delivery.timeout.ms", "15000")
+            .set("retry.backoff.ms", "100")
+            .set("reconnect.backoff.ms", "100")
+            .set("reconnect.backoff.max.ms", "1000")
             .create()
             .context("Failed to create Kafka producer")?;
 
-        // Consumer configuration
+        // Consumer configuration with better settings
         let mut consumer_config = ClientConfig::new();
         consumer_config.set("bootstrap.servers", &config.bootstrap_servers);
         consumer_config.set("enable.partition.eof", "false");
-        consumer_config.set("session.timeout.ms", "6000");
+        consumer_config.set("session.timeout.ms", "10000");
+        consumer_config.set("heartbeat.interval.ms", "3000");
         consumer_config.set("enable.auto.commit", "true");
+        consumer_config.set("auto.offset.reset", "latest");
+        consumer_config.set("reconnect.backoff.ms", "100");
+        consumer_config.set("reconnect.backoff.max.ms", "1000");
         
         if let Some(group_id) = config.group_id {
             consumer_config.set("group.id", group_id);
@@ -53,6 +64,29 @@ impl KafkaClient {
             .context("Failed to create Kafka consumer")?;
 
         Ok(Self { producer, consumer })
+    }
+
+    pub async fn new_with_retry(config: KafkaClientConfig, max_retries: u32, retry_delay: Duration) -> Result<Self> {
+        let mut last_error = None;
+        
+        for attempt in 1..=max_retries {
+            match Self::new(config.clone()) {
+                Ok(client) => {
+                    info!("Kafka client connected successfully on attempt {}", attempt);
+                    return Ok(client);
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < max_retries {
+                        warn!("Failed to connect to Kafka on attempt {} of {}: {}. Retrying in {:?}...", 
+                              attempt, max_retries, last_error.as_ref().unwrap(), retry_delay);
+                        sleep(retry_delay).await;
+                    }
+                }
+            }
+        }
+        
+        Err(last_error.unwrap().context(format!("Failed to connect to Kafka after {} attempts", max_retries)))
     }
 
     pub async fn produce_event(
