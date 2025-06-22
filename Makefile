@@ -1,20 +1,33 @@
-# Build all services
-.PHONY: build
-build:
-	@printf '\033[0;34m> Building services...\033[0m\n'
-	docker compose build
-
-# Start all services
+# Run all services (infrastructure + applications)
 .PHONY: run
 run:
-	@printf '\033[0;34m> Starting services...\033[0m\n'
-	docker compose up -d
+	@printf '\033[0;34m> Building and starting all services...\033[0m\n'
+	docker compose up --build -d
+	@printf '\033[0;34m> Waiting for services to be ready...\033[0m\n'
+	@echo "Checking rag-api health..."
+	@while ! curl -s http://localhost:3000/api/v1/health > /dev/null 2>&1; do \
+		echo "Waiting for rag-api..."; \
+		sleep 2; \
+	done
+	@echo "✓ rag-api is ready"
+	@echo "Checking Qdrant..."
+	@while ! curl -s http://localhost:6333/collections > /dev/null 2>&1; do \
+		echo "Waiting for Qdrant..."; \
+		sleep 2; \
+	done
+	@echo "✓ Qdrant is ready"
+	@printf '\033[0;32m> All services are running and ready!\033[0m\n'
+	@echo "Services available:"
+	@echo "  - RAG API: http://localhost:3000"
+	@echo "  - PostgreSQL: localhost:5432"
+	@echo "  - Qdrant: http://localhost:6333"
+	@echo "  - Kafka: localhost:9092"
 
-# Start services with logs
-.PHONY: run-logs
-run-logs:
-	@printf '\033[0;34m> Starting services with logs...\033[0m\n'
-	docker compose up
+# Test the API with k6
+.PHONY: test
+test:
+	@printf '\033[0;34m> Running k6 load test...\033[0m\n'
+	k6 run load-test.js
 
 # Stop all services
 .PHONY: down
@@ -22,100 +35,24 @@ down:
 	@printf '\033[0;34m> Stopping services...\033[0m\n'
 	docker compose down
 
-# Stop all services and remove volumes
+# Clean up (stop services and remove volumes)
 .PHONY: clean
 clean:
 	@printf '\033[0;34m> Cleaning up services and volumes...\033[0m\n'
 	docker compose down --volumes --remove-orphans
 
-# View logs
-.PHONY: logs
-logs:
-	docker compose logs -f
-
-# View specific service logs
-.PHONY: logs-api
-logs-api:
-	docker compose logs -f rag-api
-
-.PHONY: logs-processor
-logs-processor:
-	docker compose logs -f file-processor
-
-.PHONY: logs-kafka
-logs-kafka:
-	docker compose logs -f kafka
-
-# Check service status
-.PHONY: status
-status:
-	docker compose ps
-
-# Run cargo check on all workspace members
-.PHONY: check
-check:
-	@printf '\033[0;34m> Running cargo check...\033[0m\n'
-	cargo check --workspace
-
-# Run cargo test on all workspace members
-.PHONY: test
-test:
-	@printf '\033[0;34m> Running tests...\033[0m\n'
-	cargo test --workspace
-
-# Format code
-.PHONY: fmt
-fmt:
-	@printf '\033[0;34m> Formatting code...\033[0m\n'
-	cargo fmt --all
-
-# Run clippy
-.PHONY: clippy
-clippy:
-	@printf '\033[0;34m> Running clippy...\033[0m\n'
-	cargo clippy --workspace -- -D warnings
-
-# Setup environment (create .env from .env.example)
-.PHONY: setup
-setup:
-	@printf '\033[0;34m> Setting up environment...\033[0m\n'
-	@if [ ! -f .env ]; then \
-		echo "Creating .env file..."; \
-		echo "OPENAI_API_KEY=your_openai_api_key_here" > .env; \
-		echo "Please update .env with your OpenAI API key"; \
-	else \
-		echo ".env file already exists"; \
-	fi
-
-# Test API endpoints
-.PHONY: test-api
-test-api:
-	@printf '\033[0;34m> Testing API endpoints...\033[0m\n'
-	@echo "Health check:"
-	curl -s http://localhost:3000/api/v1/health | jq .
-	@echo "\nQuery test:"
-	curl -s -X POST http://localhost:3000/api/v1/query \
-		-H "Content-Type: application/json" \
-		-d '{"query": "How do I optimize database queries?"}' | jq .
-
-# Help
+# Show help
 .PHONY: help
 help:
-	@echo "Available commands:"
-	@echo "  build       - Build all services"
-	@echo "  run         - Start all services in background"
-	@echo "  run-logs    - Start all services with logs"
-	@echo "  down        - Stop all services"
-	@echo "  clean       - Stop services and remove volumes"
-	@echo "  logs        - View all service logs"
-	@echo "  logs-api    - View API service logs"
-	@echo "  logs-processor - View file processor logs"
-	@echo "  logs-kafka  - View Kafka logs"
-	@echo "  status      - Check service status"
-	@echo "  check       - Run cargo check"
-	@echo "  test        - Run tests"
-	@echo "  fmt         - Format code"
-	@echo "  clippy      - Run clippy"
-	@echo "  setup       - Create .env file"
-	@echo "  test-api    - Test API endpoints"
-	@echo "  help        - Show this help" 
+	@echo "🚀 RAG System - Simple Commands:"
+	@echo ""
+	@echo "  run     - Build and start all services (infrastructure + applications)"
+	@echo "  test    - Run k6 load test against the API"
+	@echo "  down    - Stop all services"
+	@echo "  clean   - Stop services and remove volumes"
+	@echo "  help    - Show this help"
+	@echo ""
+	@echo "💡 Quick Start:"
+	@echo "  make run     # Start everything"
+	@echo "  make test    # Test the API"
+	@echo "  make down    # Stop when done"

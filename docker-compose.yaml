@@ -1,6 +1,8 @@
 services:
   rag-api:
-    build: ./services/rag-api
+    build:
+      context: .
+      dockerfile: ./services/rag-api/Dockerfile
     ports: ["3000:3000"]
     depends_on: [postgres, qdrant, kafka]
     environment:
@@ -13,7 +15,9 @@ services:
       QDRANT_URL: http://qdrant:6333
       
   file-processor:
-    build: ./services/file-processor
+    build:
+      context: .
+      dockerfile: ./services/file-processor/Dockerfile
     volumes: ["./documents:/documents"]
     depends_on: [postgres, qdrant, kafka]
     environment:
