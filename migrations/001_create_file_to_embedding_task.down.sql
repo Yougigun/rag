@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS file_to_embedding_task;

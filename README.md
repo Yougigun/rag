@@ -47,12 +47,18 @@ This project follows a microservices architecture with the following components:
    - Wait for services to be ready
    - Show service URLs
 
-4. **Test the API**:
+4. **Database migrations** (automatic):
+   Migrations in the `migrations/` folder are automatically applied during startup. You can also run them manually:
+   ```bash
+   make migrate
+   ```
+
+5. **Test the API**:
    ```bash
    make test
    ```
 
-5. **Stop services**:
+6. **Stop services**:
    ```bash
    make down
    ```
@@ -68,6 +74,7 @@ rag/
 │   ├── src/app/         # Application utilities
 │   └── src/client/      # Client implementations
 ├── documents/           # Sample documents directory
+├── migrations/          # Database migration scripts
 ├── docker-compose.yaml  # Service orchestration
 ├── Makefile            # Development commands
 ├── .gitignore          # Git ignore rules
@@ -80,11 +87,13 @@ rag/
 ### Available Commands
 
 ```bash
-make help    # Show all available commands
-make run     # Build and start all services (infrastructure + applications)
-make test    # Run k6 load test against the API
-make down    # Stop all services
-make clean   # Stop services and remove volumes
+make help          # Show all available commands
+make run           # Build and start all services (infrastructure + applications)
+make migrate       # Run database migrations
+make migrate-down  # Rollback database migrations
+make test          # Run k6 load test against the API
+make down          # Stop all services
+make clean         # Stop services and remove volumes
 ```
 
 ### Manual Testing
@@ -165,6 +174,55 @@ Response (currently mock implementation):
   "query": "How do I optimize database queries?"
 }
 ```
+
+## 🗄️ Database Migrations
+
+The project uses the [migrate/migrate](https://github.com/golang-migrate/migrate) tool for database schema management.
+
+### Migration Commands
+
+```bash
+# Apply all pending migrations
+make migrate
+
+# Rollback the last migration
+make migrate-down
+```
+
+### Adding New Migrations
+
+1. Create migration files in the `migrations/` folder:
+   ```bash
+   # Create up migration
+   touch migrations/001_create_users_table.up.sql
+   
+   # Create down migration  
+   touch migrations/001_create_users_table.down.sql
+   ```
+
+2. Write your SQL:
+   ```sql
+   -- migrations/001_create_users_table.up.sql
+   CREATE TABLE users (
+       id SERIAL PRIMARY KEY,
+       email VARCHAR(255) UNIQUE NOT NULL,
+       created_at TIMESTAMP DEFAULT NOW()
+   );
+   
+   -- migrations/001_create_users_table.down.sql
+   DROP TABLE users;
+   ```
+
+3. Apply the migration:
+   ```bash
+   make migrate
+   ```
+
+### Migration Requirements
+
+- PostgreSQL must be running (started by `make run`)
+- Migration files must follow the naming pattern: `{version}_{description}.{up|down}.sql`
+- Always create both `up` and `down` migrations for reversibility
 
 ## 🔧 Configuration
 
@@ -257,9 +315,10 @@ curl -X POST http://localhost:3000/api/v1/query \
 ## 🚀 Development Workflow
 
 1. **Start services**: `make run`
-2. **Test API**: `make test`
-3. **View logs**: `docker compose logs -f`
-4. **Stop services**: `make down`
+2. **Migrations**: Automatically applied during startup
+3. **Test API**: `make test`
+4. **View logs**: `docker compose logs -f`
+5. **Stop services**: `make down`
 
 ## 🆘 Troubleshooting
 

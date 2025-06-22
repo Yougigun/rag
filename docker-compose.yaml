@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: ./services/rag-api/Dockerfile
     ports: ["3000:3000"]
-    depends_on: [postgres, qdrant, kafka]
+    depends_on: [migrate, postgres, qdrant, kafka]
     environment:
       RUST_LOG: info
       DATABASE_HOSTNAME: postgres
@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: ./services/file-processor/Dockerfile
     volumes: ["./documents:/documents"]
-    depends_on: [postgres, qdrant, kafka]
+    depends_on: [migrate, postgres, qdrant, kafka]
     environment:
       RUST_LOG: info
       DATABASE_HOSTNAME: postgres
@@ -30,6 +30,14 @@ services:
       QDRANT_URL: http://qdrant:6333
       DOCUMENTS_PATH: /documents
     
+  migrate:
+    image: migrate/migrate:latest
+    depends_on: [postgres]
+    volumes:
+      - ./migrations:/migrations
+    command: ["-path", "/migrations", "-database", "postgres://raguser:ragpassword@postgres:5432/rag?sslmode=disable", "up"]
+    restart: "no"
+      
   postgres:
     image: postgres:latest
     environment:

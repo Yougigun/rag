@@ -29,6 +29,20 @@ test:
 	@printf '\033[0;34m> Running k6 load test...\033[0m\n'
 	k6 run load-test.js
 
+# Run database migrations
+.PHONY: migrate
+migrate:
+	@printf '\033[0;34m> Running database migrations...\033[0m\n'
+	docker run --rm -v $(PWD)/migrations:/migrations --network host migrate/migrate \
+		-path=/migrations -database="postgres://raguser:ragpassword@localhost:5432/rag?sslmode=disable" up
+
+# Rollback database migrations
+.PHONY: migrate-down
+migrate-down:
+	@printf '\033[0;34m> Rolling back database migrations...\033[0m\n'
+	docker run --rm -v $(PWD)/migrations:/migrations --network host migrate/migrate \
+		-path=/migrations -database="postgres://raguser:ragpassword@localhost:5432/rag?sslmode=disable" down 1
+
 # Stop all services
 .PHONY: down
 down:
@@ -46,13 +60,16 @@ clean:
 help:
 	@echo "🚀 RAG System - Simple Commands:"
 	@echo ""
-	@echo "  run     - Build and start all services (infrastructure + applications)"
-	@echo "  test    - Run k6 load test against the API"
-	@echo "  down    - Stop all services"
-	@echo "  clean   - Stop services and remove volumes"
-	@echo "  help    - Show this help"
+	@echo "  run          - Build and start all services (infrastructure + applications)"
+	@echo "  migrate      - Run database migrations"
+	@echo "  migrate-down - Rollback database migrations"
+	@echo "  test         - Run k6 load test against the API"
+	@echo "  down         - Stop all services"
+	@echo "  clean        - Stop services and remove volumes"
+	@echo "  help         - Show this help"
 	@echo ""
 	@echo "💡 Quick Start:"
-	@echo "  make run     # Start everything"
-	@echo "  make test    # Test the API"
-	@echo "  make down    # Stop when done"
+	@echo "  make run      # Start everything"
+	@echo "  make migrate  # Run database migrations"
+	@echo "  make test     # Test the API"
+	@echo "  make down     # Stop when done"
