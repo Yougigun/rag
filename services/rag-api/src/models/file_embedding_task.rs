@@ -3,23 +3,24 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Pool, Postgres};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
     Pending,
     Processing,
     Completed,
     Failed,
+    Unknown,
 }
 
 impl From<String> for TaskStatus {
     fn from(s: String) -> Self {
         match s.as_str() {
-            "pending" => TaskStatus::Pending,
-            "processing" => TaskStatus::Processing,
-            "completed" => TaskStatus::Completed,
-            "failed" => TaskStatus::Failed,
-            _ => TaskStatus::Pending,
+            "pending" => Self::Pending,
+            "processing" => Self::Processing,
+            "completed" => Self::Completed,
+            "failed" => Self::Failed,
+            _ => Self::Unknown,
         }
     }
 }
@@ -31,6 +32,7 @@ impl From<TaskStatus> for String {
             TaskStatus::Processing => "processing".to_string(),
             TaskStatus::Completed => "completed".to_string(),
             TaskStatus::Failed => "failed".to_string(),
+            TaskStatus::Unknown => "unknown".to_string(),
         }
     }
 }
@@ -132,14 +134,14 @@ impl FileEmbeddingTask {
         let tasks = match status_filter {
             Some(status) => {
                 let status_str: String = status.into();
-                sqlx::query_as::<_, FileEmbeddingTask>(
-                    r#"
+                sqlx::query_as::<_, Self>(
+                    "
                     SELECT id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
                     FROM file_to_embedding_task
                     WHERE status = $1
                     ORDER BY created_at DESC
                     LIMIT $2 OFFSET $3
-                    "#,
+                    ",
                 )
                 .bind(status_str)
                 .bind(limit)
@@ -148,13 +150,13 @@ impl FileEmbeddingTask {
                 .await?
             }
             None => {
-                sqlx::query_as::<_, FileEmbeddingTask>(
-                    r#"
+                sqlx::query_as::<_, Self>(
+                    "
                     SELECT id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
                     FROM file_to_embedding_task
                     ORDER BY created_at DESC
                     LIMIT $1 OFFSET $2
-                    "#,
+                    ",
                 )
                 .bind(limit)
                 .bind(offset)
@@ -182,8 +184,8 @@ impl FileEmbeddingTask {
         // For now, we'll do a basic update that handles status changes
         let status_str: Option<String> = request.status.map(|s| s.into());
 
-        let task = sqlx::query_as::<_, FileEmbeddingTask>(
-            r#"
+        let task = sqlx::query_as::<_, Self>(
+            "
             UPDATE file_to_embedding_task
             SET status = COALESCE($1, status),
                 error_message = COALESCE($2, error_message),
@@ -199,7 +201,7 @@ impl FileEmbeddingTask {
                 END
             WHERE id = $4
             RETURNING id, file_name, status, created_at, updated_at, started_at, completed_at, error_message, embedding_count
-            "#,
+            ",
         )
         .bind(status_str)
         .bind(request.error_message)
@@ -213,10 +215,10 @@ impl FileEmbeddingTask {
 
     pub async fn delete(pool: &Pool<Postgres>, id: i32) -> Result<bool> {
         let result = sqlx::query(
-            r#"
+            "
             DELETE FROM file_to_embedding_task
             WHERE id = $1
-            "#,
+            ",
         )
         .bind(id)
         .execute(pool)
