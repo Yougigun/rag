@@ -4,7 +4,7 @@ echo "Setting up Kafka topics..."
 
 # Create the file-embedding-tasks topic
 /opt/kafka/bin/kafka-topics.sh \
-    --bootstrap-server broker:19092 \
+    --bootstrap-server rag-broker:19092 \
     --create \
     --topic file-embedding-tasks \
     --partitions 1 \

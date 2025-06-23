@@ -8,9 +8,9 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+use qdrant_client::Qdrant;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx;
 use std::net::SocketAddr;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
@@ -22,14 +22,17 @@ use xlib::{
 use handlers::file_embedding_task::{
     create_task, delete_task, get_task, list_tasks, update_task,
 };
+use handlers::search::search_embeddings;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db_pool: sqlx::Pool<sqlx::Postgres>,
     pub kafka_client: std::sync::Arc<KafkaClient>,
+    pub qdrant_client: std::sync::Arc<Qdrant>,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct QueryRequest {
     query: String,
     system_prompt: Option<String>,
@@ -95,10 +98,22 @@ async fn main() -> Result<()> {
     ).await?;
     let kafka_client = std::sync::Arc::new(kafka_client);
 
+    // Initialize Qdrant client
+    let qdrant_url = std::env::var("QDRANT_URL")
+        .unwrap_or_else(|_| "http://localhost:6333".to_string());
+    
+    info!("Connecting to Qdrant at: {}", qdrant_url);
+    let qdrant_client = std::sync::Arc::new(
+        Qdrant::from_url(&qdrant_url)
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to connect to Qdrant: {}", e))?
+    );
+
     // Create application state
     let app_state = AppState {
         db_pool: pool,
         kafka_client,
+        qdrant_client,
     };
 
     let app = Router::new()
@@ -111,6 +126,8 @@ async fn main() -> Result<()> {
         .route("/api/v1/embedding-tasks/{id}", get(get_task))
         .route("/api/v1/embedding-tasks/{id}", put(update_task))
         .route("/api/v1/embedding-tasks/{id}", delete(delete_task))
+        // Search endpoint
+        .route("/api/v1/search", post(search_embeddings))
         .with_state(app_state)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());

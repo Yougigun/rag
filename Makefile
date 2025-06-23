@@ -23,13 +23,32 @@ run:
 	@echo "  - Qdrant: http://localhost:6333"
 	@echo "  - Kafka: localhost:9092"
 
-# Run API test using Docker k6
+# Run all tests using Docker k6
 .PHONY: test
 test:
 	@printf '\033[0;34m> Running API tests...\033[0m\n'
-	docker run --rm -i --network host \
+	@if docker run --rm -i --network host \
 		-v $(PWD)/tests:/tests \
-		grafana/k6:latest run /tests/api-test.js
+		grafana/k6:latest run /tests/api-test.js --quiet | tee /tmp/api-test.log && \
+		grep -q "checks.*100\.00%" /tmp/api-test.log; then \
+		printf '\033[0;32m✅ API tests PASSED (100%% checks successful)\033[0m\n'; \
+	else \
+		printf '\033[0;31m❌ API tests FAILED (some checks failed)\033[0m\n'; \
+		grep "checks.*:" /tmp/api-test.log || true; \
+		exit 1; \
+	fi
+	@printf '\033[0;34m> Running Qdrant integration tests...\033[0m\n'
+	@if docker run --rm -i --network host \
+		-v $(PWD)/tests:/tests \
+		grafana/k6:latest run /tests/qdrant-integration-test.js --quiet | tee /tmp/qdrant-test.log && \
+		grep -q "checks.*100\.00%" /tmp/qdrant-test.log; then \
+		printf '\033[0;32m✅ Qdrant integration tests PASSED (100%% checks successful)\033[0m\n'; \
+	else \
+		printf '\033[0;31m❌ Qdrant integration tests FAILED (some checks failed)\033[0m\n'; \
+		grep "checks.*:" /tmp/qdrant-test.log || true; \
+		exit 1; \
+	fi
+	@printf '\033[0;32m🎉 All tests PASSED successfully!\033[0m\n'
 
 # Run database migrations
 .PHONY: migrate
@@ -79,7 +98,7 @@ help:
 	@echo "  run          - Build and start all services (infrastructure + applications)"
 	@echo "  migrate      - Run database migrations"
 	@echo "  migrate-down - Rollback database migrations"
-	@echo "  test         - Run API tests (Docker k6)"
+	@echo "  test         - Run all tests (API + Qdrant integration)"
 	@echo "  verify-all   - Complete pipeline: clean → build → deploy → test → clean"
 	@echo "  down         - Stop all services"
 	@echo "  clean        - Stop services and remove volumes"
