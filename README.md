@@ -37,6 +37,8 @@ This project follows a microservices architecture with the following components:
    echo "OPENAI_API_KEY=test_key" > .env
    ```
 
+
+
 3. **Start everything**:
    ```bash
    make run
