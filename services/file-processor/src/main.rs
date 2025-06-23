@@ -1,4 +1,5 @@
 use anyhow::Result;
+use base64::{Engine as _, engine::general_purpose};
 use std::time::Duration;
 use tokio::time;
 use tracing::{error, info};
@@ -55,11 +56,34 @@ async fn kafka_consumer_loop(kafka_client: &KafkaClient) {
                 info!("  Timestamp: {}", message.timestamp);
                 info!("  Payload: {}", serde_json::to_string_pretty(&message.payload).unwrap_or_else(|_| "Invalid JSON".to_string()));
                 
-                // Here you would process the message (e.g., start file embedding)
-                // For now, just print the details
+                // Process the message based on event type
                 if message.event_type == "task_created" {
                     if let Some(task_id) = message.payload.get("task_id") {
                         info!("🚀 Processing file embedding task {}", task_id);
+                        
+                        // Extract file content if present
+                        if let Some(file_content) = message.payload.get("file_content") {
+                            if let Some(content_str) = file_content.as_str() {
+                                match general_purpose::STANDARD.decode(content_str) {
+                                    Ok(decoded_bytes) => {
+                                        match String::from_utf8(decoded_bytes) {
+                                            Ok(decoded_text) => {
+                                                info!("📄 Successfully decoded file content: '{}'", decoded_text);
+                                                info!("📝 Content length: {} characters", decoded_text.len());
+                                            }
+                                            Err(e) => {
+                                                error!("Failed to convert decoded bytes to UTF-8: {}", e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to decode base64 content: {}", e);
+                                    }
+                                }
+                            }
+                        } else {
+                            info!("⚠️ No file_content found in message");
+                        }
                     }
                 }
             }

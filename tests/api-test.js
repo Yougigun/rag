@@ -40,7 +40,8 @@ export default function () {
     // Test 2: Create embedding task
     console.log('2️⃣ Testing create embedding task...');
     const createTaskPayload = {
-        file_name: 'test-document.txt'
+        file_name: 'test-document.txt',
+        file_content: 'aGVsbG8='  // "hello" in base64
     };
 
     const createResponse = http.post(

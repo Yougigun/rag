@@ -23,29 +23,13 @@ run:
 	@echo "  - Qdrant: http://localhost:6333"
 	@echo "  - Kafka: localhost:9092"
 
-# Run comprehensive test suite
+# Run API test using Docker k6
 .PHONY: test
 test:
-	@printf '\033[0;34m> Running comprehensive test suite...\033[0m\n'
-	./tests/run-tests.sh
-
-# Run smoke test only
-.PHONY: smoke-test
-smoke-test:
-	@printf '\033[0;34m> Running smoke test...\033[0m\n'
-	k6 run tests/smoke-test.js
-
-# Run API test only
-.PHONY: api-test
-api-test:
 	@printf '\033[0;34m> Running API tests...\033[0m\n'
-	k6 run tests/api-test.js
-
-# Run load test only
-.PHONY: load-test
-load-test:
-	@printf '\033[0;34m> Running load test...\033[0m\n'
-	k6 run tests/load-test.js
+	docker run --rm -i --network host \
+		-v $(PWD)/tests:/tests \
+		grafana/k6:latest run /tests/api-test.js
 
 # Run database migrations
 .PHONY: migrate
@@ -73,6 +57,20 @@ clean:
 	@printf '\033[0;34m> Cleaning up services and volumes...\033[0m\n'
 	docker compose down --volumes --remove-orphans
 
+# Complete verification pipeline: build, deploy, test, cleanup
+.PHONY: verify-all
+verify-all:
+	@printf '\033[0;33m🚀 Starting complete verification pipeline...\033[0m\n'
+	@printf '\033[0;34m> Step 1: Cleaning previous environment...\033[0m\n'
+	$(MAKE) clean
+	@printf '\033[0;34m> Step 2: Building and deploying services...\033[0m\n'
+	$(MAKE) run
+	@printf '\033[0;34m> Step 3: Running API tests...\033[0m\n'
+	$(MAKE) test
+	@printf '\033[0;34m> Step 4: Cleaning up containers...\033[0m\n'
+	$(MAKE) clean
+	@printf '\033[0;32m✅ Complete verification pipeline completed successfully!\033[0m\n'
+
 # Show help
 .PHONY: help
 help:
@@ -81,21 +79,11 @@ help:
 	@echo "  run          - Build and start all services (infrastructure + applications)"
 	@echo "  migrate      - Run database migrations"
 	@echo "  migrate-down - Rollback database migrations"
-	@echo "  test         - Run comprehensive test suite (smoke + API + optional load)"
-	@echo "  smoke-test   - Run smoke test (quick health check)"
-	@echo "  api-test     - Run comprehensive API tests"
-	@echo "  load-test    - Run load/performance tests"
+	@echo "  test         - Run API tests (Docker k6)"
+	@echo "  verify-all   - Complete pipeline: clean → build → deploy → test → clean"
 	@echo "  down         - Stop all services"
 	@echo "  clean        - Stop services and remove volumes"
 	@echo "  help         - Show this help"
 	@echo ""
 	@echo "💡 Quick Start:"
-	@echo "  make run      # Start everything"
-	@echo "  make migrate  # Run database migrations"
-	@echo "  make test     # Test the whole system"
-	@echo "  make down     # Stop when done"
-	@echo ""
-	@echo "🧪 Testing Options:"
-	@echo "  make smoke-test  # Quick health check"
-	@echo "  make api-test    # Full API functionality"
-	@echo "  make load-test   # Performance testing"
+	@echo "  make verify-all  # Complete verification pipeline (recommended)"

@@ -5,7 +5,6 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
 
 use crate::{AppState, models::file_embedding_task::{CreateTaskRequest, FileEmbeddingTask, TaskStatus, UpdateTaskRequest}};
 
@@ -20,6 +19,9 @@ pub async fn create_task(
     State(app_state): State<AppState>,
     Json(payload): Json<CreateTaskRequest>,
 ) -> impl IntoResponse {
+    // Store file_content before payload is moved
+    let file_content = payload.file_content.clone();
+    
     // Create task in database
     match FileEmbeddingTask::create(&app_state.db_pool, payload).await {
         Ok(task) => {
@@ -27,6 +29,7 @@ pub async fn create_task(
             let kafka_payload = serde_json::json!({
                 "task_id": task.id,
                 "file_name": task.file_name,
+                "file_content": file_content,
                 "status": task.status
             });
 

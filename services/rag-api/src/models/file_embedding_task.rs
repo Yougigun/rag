@@ -53,6 +53,7 @@ pub struct FileEmbeddingTask {
 #[derive(Debug, Deserialize)]
 pub struct CreateTaskRequest {
     pub file_name: String,
+    pub file_content: String,
 }
 
 #[derive(Debug, Deserialize)]
