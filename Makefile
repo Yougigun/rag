@@ -23,11 +23,29 @@ run:
 	@echo "  - Qdrant: http://localhost:6333"
 	@echo "  - Kafka: localhost:9092"
 
-# Test the API endpoints with k6
+# Run comprehensive test suite
 .PHONY: test
 test:
+	@printf '\033[0;34m> Running comprehensive test suite...\033[0m\n'
+	./tests/run-tests.sh
+
+# Run smoke test only
+.PHONY: smoke-test
+smoke-test:
+	@printf '\033[0;34m> Running smoke test...\033[0m\n'
+	k6 run tests/smoke-test.js
+
+# Run API test only
+.PHONY: api-test
+api-test:
 	@printf '\033[0;34m> Running API tests...\033[0m\n'
-	k6 run api-test.js
+	k6 run tests/api-test.js
+
+# Run load test only
+.PHONY: load-test
+load-test:
+	@printf '\033[0;34m> Running load test...\033[0m\n'
+	k6 run tests/load-test.js
 
 # Run database migrations
 .PHONY: migrate
@@ -63,7 +81,10 @@ help:
 	@echo "  run          - Build and start all services (infrastructure + applications)"
 	@echo "  migrate      - Run database migrations"
 	@echo "  migrate-down - Rollback database migrations"
-	@echo "  test         - Run API endpoint tests"
+	@echo "  test         - Run comprehensive test suite (smoke + API + optional load)"
+	@echo "  smoke-test   - Run smoke test (quick health check)"
+	@echo "  api-test     - Run comprehensive API tests"
+	@echo "  load-test    - Run load/performance tests"
 	@echo "  down         - Stop all services"
 	@echo "  clean        - Stop services and remove volumes"
 	@echo "  help         - Show this help"
@@ -71,5 +92,10 @@ help:
 	@echo "💡 Quick Start:"
 	@echo "  make run      # Start everything"
 	@echo "  make migrate  # Run database migrations"
-	@echo "  make test     # Test the API"
+	@echo "  make test     # Test the whole system"
 	@echo "  make down     # Stop when done"
+	@echo ""
+	@echo "🧪 Testing Options:"
+	@echo "  make smoke-test  # Quick health check"
+	@echo "  make api-test    # Full API functionality"
+	@echo "  make load-test   # Performance testing"

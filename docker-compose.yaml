@@ -24,7 +24,7 @@ services:
       DATABASE_NAME: rag
       DATABASE_URL: postgres://raguser:ragpassword@postgres:5432/rag
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      KAFKA_BOOTSTRAP_SERVERS: broker:19092
+      KAFKA_BOOTSTRAP_SERVERS: rag-broker:19092
       QDRANT_URL: http://qdrant:6333
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
@@ -56,7 +56,7 @@ services:
       DATABASE_USER: raguser
       DATABASE_PASSWORD: ragpassword
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      KAFKA_BOOTSTRAP_SERVERS: broker:19092
+      KAFKA_BOOTSTRAP_SERVERS: rag-broker:19092
       QDRANT_URL: http://qdrant:6333
       DOCUMENTS_PATH: /documents
 
@@ -114,17 +114,17 @@ services:
 
   kafka:
     image: apache/kafka:latest
-    container_name: broker
+    container_name: rag-broker
     ports:
       - "9092:9092"
     restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://rag-broker:19092,PLAINTEXT_HOST://localhost:9092"
       KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker:19093"
-      KAFKA_LISTENERS: "CONTROLLER://broker:19093,PLAINTEXT://broker:19092,PLAINTEXT_HOST://0.0.0.0:9092"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@rag-broker:19093"
+      KAFKA_LISTENERS: "CONTROLLER://rag-broker:19093,PLAINTEXT://rag-broker:19092,PLAINTEXT_HOST://0.0.0.0:9092"
       KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
