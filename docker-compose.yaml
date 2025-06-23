@@ -23,9 +23,10 @@ services:
       DATABASE_PASSWORD: ragpassword
       DATABASE_NAME: rag
       DATABASE_URL: postgres://raguser:ragpassword@postgres:5432/rag
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
       KAFKA_BOOTSTRAP_SERVERS: rag-broker:19092
       QDRANT_URL: http://qdrant:6333
+    env_file:
+      - .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
       interval: 30s
@@ -55,10 +56,11 @@ services:
       DATABASE_HOSTNAME: postgres
       DATABASE_USER: raguser
       DATABASE_PASSWORD: ragpassword
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
       KAFKA_BOOTSTRAP_SERVERS: rag-broker:19092
       QDRANT_URL: http://qdrant:6333
       DOCUMENTS_PATH: /documents
+    env_file:
+      - .env
 
   migrate:
     container_name: migrate

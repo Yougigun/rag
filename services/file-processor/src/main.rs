@@ -1,5 +1,7 @@
 use anyhow::Result;
 use base64::{Engine as _, engine::general_purpose};
+use reqwest;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time;
 use tracing::{error, info};
@@ -7,6 +9,31 @@ use xlib::{
     app::{graceful_shutdown::shutdown_signal, tracing::init_tracing},
     client::{KafkaClient, KafkaClientConfig},
 };
+
+#[derive(Serialize)]
+struct EmbeddingRequest {
+    input: String,
+    model: String,
+}
+
+#[derive(Deserialize)]
+struct EmbeddingResponse {
+    data: Vec<EmbeddingData>,
+    model: String,
+    usage: Usage,
+}
+
+#[derive(Deserialize)]
+struct EmbeddingData {
+    embedding: Vec<f32>,
+    index: i32,
+}
+
+#[derive(Deserialize)]
+struct Usage {
+    prompt_tokens: i32,
+    total_tokens: i32,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -47,6 +74,54 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
+    let api_key = std::env::var("OPENAI_API_KEY")
+        .map_err(|_| anyhow::anyhow!("OPENAI_API_KEY environment variable not set"))?;
+        
+    let client = reqwest::Client::new();
+    
+    let request_body = EmbeddingRequest {
+        input: text.to_string(),
+        model: "text-embedding-3-small".to_string(),
+    };
+    
+    info!("🤖 Generating embedding for text: '{}'", text);
+    
+    let response = client
+        .post("https://api.openai.com/v1/embeddings")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request_body)
+        .send()
+        .await?;
+    
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(anyhow::anyhow!("OpenAI API request failed with status {}: {}", status, error_text));
+    }
+    
+    let embedding_response: EmbeddingResponse = response.json().await?;
+    
+    if let Some(embedding_data) = embedding_response.data.first() {
+        let embedding = embedding_data.embedding.clone();
+        
+        info!("✅ Successfully generated embedding!");
+        info!("📊 Model: {}", embedding_response.model);
+        info!("🔢 Embedding dimensions: {}", embedding.len());
+        info!("💰 Token usage: {} prompt tokens, {} total tokens", 
+              embedding_response.usage.prompt_tokens, 
+              embedding_response.usage.total_tokens);
+        
+        // Print the embedding vector as requested
+        info!("🎯 Embedding vector: {:?}", embedding);
+        
+        Ok(embedding)
+    } else {
+        Err(anyhow::anyhow!("No embedding data received from OpenAI API"))
+    }
+}
+
 async fn kafka_consumer_loop(kafka_client: &KafkaClient) {
     loop {
         match kafka_client.consume_message().await {
@@ -70,6 +145,17 @@ async fn kafka_consumer_loop(kafka_client: &KafkaClient) {
                                             Ok(decoded_text) => {
                                                 info!("📄 Successfully decoded file content: '{}'", decoded_text);
                                                 info!("📝 Content length: {} characters", decoded_text.len());
+                                                
+                                                // Generate embedding for the decoded text
+                                                match generate_embedding(&decoded_text).await {
+                                                    Ok(embedding) => {
+                                                        info!("🎉 Embedding generation completed successfully!");
+                                                        info!("📊 Generated {} dimensional embedding", embedding.len());
+                                                    }
+                                                    Err(e) => {
+                                                        error!("Failed to generate embedding: {}", e);
+                                                    }
+                                                }
                                             }
                                             Err(e) => {
                                                 error!("Failed to convert decoded bytes to UTF-8: {}", e);
