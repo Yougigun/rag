@@ -12,8 +12,8 @@ const BASE_URL = 'http://localhost:3000';
 export default function () {
     console.log('🚀 Starting RAG API + Qdrant Integration Test Suite...\n');
     // wait for 10 seconds
-    console.log('Waiting for 10 seconds...');
-    sleep(10);
+    // console.log('Waiting for 10 seconds...');
+    // sleep(10);
 
     // Test 1: Health check endpoint
     console.log('1️⃣ Testing health check endpoint...');
@@ -120,8 +120,8 @@ export default function () {
 
     // Test 4: Wait for embedding processing to complete
     console.log('4️⃣ Waiting for embedding processing to complete...');
-    console.log('⏳ Waiting 5 seconds for file-processor to generate and store embeddings...');
-    sleep(5);
+    console.log('⏳ Waiting 10 seconds for file-processor to generate and store embeddings...');
+    sleep(10);
 
     // Test 4.5: Check that both embedding tasks are completed
     console.log('4️⃣.5 Verifying embedding tasks are completed...');
