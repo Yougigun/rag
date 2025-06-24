@@ -1,17 +1,18 @@
 #![allow(clippy::redundant_pub_crate)]
 
 use anyhow::Result;
+use axum::{http::StatusCode, response::Json, routing::get, Router};
 use base64::{engine::general_purpose, Engine as _};
 use qdrant_client::qdrant::{
     CreateCollectionBuilder, Distance, PointStruct, UpsertPointsBuilder, VectorParamsBuilder,
 };
 use qdrant_client::Qdrant;
-use uuid::Uuid;
-use reqwest;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{net::SocketAddr, sync::atomic::{AtomicBool, Ordering}, time::Duration};
 use tokio::time;
+use tower::ServiceBuilder;
 use tracing::{error, info, warn};
+use uuid::Uuid;
 use xlib::{
     app::{graceful_shutdown::shutdown_signal, tracing::init_tracing},
     client::{KafkaClient, KafkaClientConfig},
@@ -51,6 +52,43 @@ struct UpdateTaskRequest {
 
 const COLLECTION_NAME: &str = "rag-collection";
 const VECTOR_SIZE: u64 = 1536; // OpenAI text-embedding-3-small dimensions
+
+// Global flag to track if kafka consumer is ready
+static KAFKA_CONSUMER_READY: AtomicBool = AtomicBool::new(false);
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: String,
+    service: String,
+    version: String,
+}
+
+async fn health_check() -> Result<Json<HealthResponse>, StatusCode> {
+    if KAFKA_CONSUMER_READY.load(Ordering::Relaxed) {
+        let response = HealthResponse {
+            status: "healthy".to_string(),
+            service: "file-processor".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        };
+        Ok(Json(response))
+    } else {
+        Err(StatusCode::SERVICE_UNAVAILABLE)
+    }
+}
+
+async fn start_health_server() -> Result<()> {
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .layer(ServiceBuilder::new());
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    info!("🏥 Health check server starting on {}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
 
 async fn update_task_status(
     task_id: u64,
@@ -215,10 +253,24 @@ async fn main() -> Result<()> {
 
     info!("File processor subscribed to Kafka topics and ready to process messages");
 
+    // Start health server
+    let health_server_handle = tokio::spawn(start_health_server());
+
+    // Mark kafka consumer as ready
+    KAFKA_CONSUMER_READY.store(true, Ordering::Relaxed);
+    info!("🚀 Kafka consumer ready - health endpoint will now return healthy");
+
     // Run indefinitely until shutdown signal
     tokio::select! {
         () = kafka_consumer_loop(&kafka_client, &qdrant_client) => {
             info!("Kafka consumer loop completed");
+        }
+        result = health_server_handle => {
+            match result {
+                Ok(Ok(())) => info!("Health server completed successfully"),
+                Ok(Err(e)) => error!("Health server error: {}", e),
+                Err(e) => error!("Health server task error: {}", e),
+            }
         }
         () = shutdown_signal() => {
             info!("Shutdown signal received");
